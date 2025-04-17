@@ -1,6 +1,15 @@
 # solana_web_token
 Secure, extensible JWT authentication for Rocket using Solana wallet signatures and custom identity providers.
 
+> **⚠️ Disclaimer**  
+> This library is provided as-is, without any guarantees of security, correctness, or fitness for a particular purpose.  
+> You are responsible for evaluating its suitability for your application, especially in production or security-sensitive environments.
+
+This library is provided as-is, without any guarantees of security, correctness, or fitness for a particular purpose.  
+You are responsible for evaluating its suitability for your application, especially in production or security-sensitive environments.
+
+</details>
+
 #### This crate enables you to:
 - 🔐 Issue and verify ES256-signed JWTs
 - 🧩 Authenticate users with Solana wallets via signed messages
