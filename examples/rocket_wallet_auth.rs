@@ -72,7 +72,20 @@ mod test {
     async fn test_protected_route_valid_token() {
         dotenv::dotenv().ok();
         let client = setup_client().await;
-        let valid_token = "eyJ0eXAiOiJKV1QiLCJhbGciOiJFUzI1NiJ9.eyJleHAiOjE3NDQ5NDQwODQsImlhdCI6MTc0NDg1NzY4NCwic3ViIjoiNkVIemNBTXYyWjlqTW5Zamoxd2hpTTdZM1ZMYVVZRFpnTkFocU1jWlBocE4iLCJkYXRhIjpudWxsfQ.zcT_vwX5oOSvfmc_dPLajT-n4Qg0C35RHiAKBfnrgcB6ALG5nNQ1QzHIxnLwG372kjxQo9YYWTFZtZqAmbLDpQ";
+        let signer = Keypair::new();
+        let message = "authorize";
+        let signature = signer.sign_message(message.as_bytes());
+        let pubkey = signer.pubkey().to_string();
+
+        let response = client.post("/auth")
+            .header(Header::new("X-public-key", pubkey))
+            .header(Header::new("X-signature", signature.to_string()))
+            .header(Header::new("X-message", message))
+            .dispatch()
+            .await;
+
+        let raw = response.into_string().await.expect("Response body missing");
+        let valid_token: String = serde_json::from_str(&raw).expect("Invalid JSON token string");
 
         let response = client.get("/protected")
             .header(Header::new("Authorization", format!("Bearer {valid_token}")))

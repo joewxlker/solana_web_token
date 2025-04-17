@@ -146,34 +146,56 @@ impl <'r>FromRequest<'r> for AuthManager {
 
 #[cfg(test)]
 mod test {
-
     use std::time::Duration;
 
+    use base64::prelude::BASE64_URL_SAFE_NO_PAD;
     use jsonwebtoken::errors::ErrorKind;
+    use once_cell::sync::Lazy;
     use rocket::tokio;
 
     use crate::providers::solana_wallet_auth::WalletAuth;
 
     use super::*;
 
-    const VALID_TOKEN: &str = "eyJ0eXAiOiJKV1QiLCJhbGciOiJFUzI1NiJ9.eyJleHAiOjE3NDQ5NDQwODQsImlhdCI6MTc0NDg1NzY4NCwic3ViIjoiNkVIemNBTXYyWjlqTW5Zamoxd2hpTTdZM1ZMYVVZRFpnTkFocU1jWlBocE4iLCJkYXRhIjpudWxsfQ.zcT_vwX5oOSvfmc_dPLajT-n4Qg0C35RHiAKBfnrgcB6ALG5nNQ1QzHIxnLwG372kjxQo9YYWTFZtZqAmbLDpQ";
-    
-    // Contains mutated sub value
-    const INVALID_TOKEN: &str = "eyJ0eXAiOiJKV1QiLCJhbGciOiJFUzI1NiJ9.eyJleHAiOjE3NDQ5NDQwODQsImlhdCI6MTc0NDg1NzY4NCwic3ViIjoiMTExNTd0M3NxTVY3MjVOVlJMclZRYkF1OThKamZrMXVDS2VoSm5YWFFzIiwiZGF0YSI6bnVsbH0.zcT_vwX5oOSvfmc_dPLajT-n4Qg0C35RHiAKBfnrgcB6ALG5nNQ1QzHIxnLwG372kjxQo9YYWTFZtZqAmbLDpQ";
+    pub static VALID_TOKEN: Lazy<String> = Lazy::new(|| {
+        let auth = WalletAuth::mock();
+        let manager = AuthManager::mock();
+
+        manager.generate_token(auth, None::<()>)
+    });
+
+    pub static INVALID_TOKEN: Lazy<String> = Lazy::new(|| {
+        let valid = VALID_TOKEN.as_str();
+        let parts: Vec<&str> = valid.split(".").collect();
+        let (header, payload, signature) = (parts[0], parts[1], parts[2]);
+        let payload_bytes = BASE64_URL_SAFE_NO_PAD.decode(payload)
+            .expect("failed to decode JWT payload");
+        
+        let mut payload: AuthToken<()> = serde_json::from_slice(&payload_bytes)
+            .expect("failed to deserialize JWT payload");
+
+        payload.sub = "tampered".to_string();
+        let tampered_bytes = serde_json::to_vec(&payload)
+            .expect("failed to serialize JWT payload");
+
+        let tampered_payload = BASE64_URL_SAFE_NO_PAD.encode(tampered_bytes);
+
+        format!("{header}.{tampered_payload}.{signature}")
+    });
 
     #[test]
     fn test_decode_valid_token() {
         dotenv::dotenv().ok();
         let manager = AuthManager::mock();
 
-        manager.decode_token::<()>(VALID_TOKEN).unwrap();
+        manager.decode_token::<()>(VALID_TOKEN.as_str()).unwrap();
     }
     
     #[test]
     fn test_decode_invalid_token() {
         dotenv::dotenv().ok();
         let manager = AuthManager::mock();
-        let result = manager.decode_token::<()>(INVALID_TOKEN);
+        let result = manager.decode_token::<()>(INVALID_TOKEN.as_str());
 
         match result {
             Err(error) => {
