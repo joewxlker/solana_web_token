@@ -149,7 +149,7 @@ mod test {
     /// Signs and decodes a JWT without a custom payload.
     /// Ensures basic encoding and decoding flow works.
     fn test_sign_and_decode() {
-        dotenv::from_filename("unit_test.env").ok();
+        dotenv::dotenv().ok();
         let auth = build_auth_manager();
 
         let signed = AuthToken::<String>::sign(Pubkey::new_unique().to_string(), None, 0, &auth.encoding_key);
@@ -160,7 +160,7 @@ mod test {
     /// Signs and decodes a JWT with a structured payload.
     /// Verifies that custom data is preserved correctly.
     fn test_sign_and_decode_with_data() {
-        dotenv::from_filename("unit_test.env").ok();
+        dotenv::dotenv().ok();
         let auth = build_auth_manager();
 
         let data = MockData {

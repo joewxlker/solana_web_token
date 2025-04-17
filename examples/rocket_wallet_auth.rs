@@ -70,7 +70,7 @@ mod test {
 
     #[tokio::test]
     async fn test_protected_route_valid_token() {
-        dotenv::from_filename("unit_test.env").ok();
+        dotenv::dotenv().ok();
         let client = setup_client().await;
         let valid_token = "eyJ0eXAiOiJKV1QiLCJhbGciOiJFUzI1NiJ9.eyJleHAiOjE3NDQ5NDQwODQsImlhdCI6MTc0NDg1NzY4NCwic3ViIjoiNkVIemNBTXYyWjlqTW5Zamoxd2hpTTdZM1ZMYVVZRFpnTkFocU1jWlBocE4iLCJkYXRhIjpudWxsfQ.zcT_vwX5oOSvfmc_dPLajT-n4Qg0C35RHiAKBfnrgcB6ALG5nNQ1QzHIxnLwG372kjxQo9YYWTFZtZqAmbLDpQ";
 
@@ -84,7 +84,7 @@ mod test {
 
     #[tokio::test]
     async fn test_protected_route_missing_token() {
-        dotenv::from_filename("unit_test.env").ok();
+        dotenv::dotenv().ok();
         let client = setup_client().await;
         let response = client.get("/protected")
             .dispatch()
@@ -95,7 +95,7 @@ mod test {
     
     #[tokio::test]
     async fn test_protected_route_invalid_token() {
-        dotenv::from_filename("unit_test.env").ok();
+        dotenv::dotenv().ok();
         let client = setup_client().await;
         let response = client.get("/protected")
             .header(Header::new("Authorization", format!("Bearer some_invalid_token")))
@@ -107,7 +107,7 @@ mod test {
 
     #[tokio::test]
     async fn test_authorize_valid_credentials() {
-        dotenv::from_filename("unit_test.env").ok();
+        dotenv::dotenv().ok();
         let client = setup_client().await;
         let signer = Keypair::new();
         let message = "authorize";
@@ -126,7 +126,7 @@ mod test {
 
     #[tokio::test]
     async fn test_authorize_missing_credentials() {
-        dotenv::from_filename("unit_test.env").ok();
+        dotenv::dotenv().ok();
         let client = setup_client().await;
         let response = client.post(format!("/auth"))
             .dispatch()
@@ -137,7 +137,7 @@ mod test {
 
     #[tokio::test]
     async fn test_authorize_signature_pubkey_mismatch() {
-        dotenv::from_filename("unit_test.env").ok();
+        dotenv::dotenv().ok();
         let client = setup_client().await;
         let signer = Keypair::new();
         let message = "authorize";

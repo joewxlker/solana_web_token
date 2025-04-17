@@ -163,7 +163,7 @@ mod test {
 
     #[test]
     fn test_decode_valid_token() {
-        dotenv::from_filename("unit_test.env").ok();
+        dotenv::dotenv().ok();
         let manager = AuthManager::mock();
 
         manager.decode_token::<()>(VALID_TOKEN).unwrap();
@@ -171,7 +171,7 @@ mod test {
     
     #[test]
     fn test_decode_invalid_token() {
-        dotenv::from_filename("unit_test.env").ok();
+        dotenv::dotenv().ok();
         let manager = AuthManager::mock();
         let result = manager.decode_token::<()>(INVALID_TOKEN);
 
@@ -188,7 +188,7 @@ mod test {
 
     #[tokio::test]
     async fn test_decode_expired_token() {
-        dotenv::from_filename("unit_test.env").ok();
+        dotenv::dotenv().ok();
         let manager = AuthManager::mock_with_config(0, 0);
 
         let token = manager.generate_token::<(), _>(
@@ -210,7 +210,7 @@ mod test {
 
     #[test]
     fn test_generate_token() {
-        dotenv::from_filename("unit_test.env").ok();
+        dotenv::dotenv().ok();
         let manager = AuthManager::mock();
 
         let token = manager.generate_token(
