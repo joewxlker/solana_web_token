@@ -1,10 +1,17 @@
 use base64::{prelude::BASE64_STANDARD, Engine};
 use jsonwebtoken::{DecodingKey, EncodingKey};
-use rocket::{http::Status, request::{FromRequest, Outcome}};
 use serde::{de::DeserializeOwned, Serialize};
-use rocket::Request;
 
-use crate::{error::AuthTokenFromRequestError, providers::AuthProvider, token::AuthToken};
+#[cfg(feature="rocket")]
+use rocket::{
+    http::Status, Request, 
+    request::{FromRequest, Outcome}
+};
+
+#[cfg(feature="rocket")]
+use crate::error::AuthTokenFromRequestError;
+
+use crate::{providers::AuthProvider, token::AuthToken};
 
 
 /// A manager for signing and verifying JWTs using ES256 (ECDSA P-256).
