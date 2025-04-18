@@ -10,17 +10,22 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  build:
-
+  test-default:
     runs-on: ubuntu-latest
-    environment: ci
     env:
       JWT_PRIVATE_KEY: ${{ secrets.JWT_PRIVATE_KEY }}
       JWT_PUBLIC_KEY: ${{ secrets.JWT_PUBLIC_KEY }}
-
     steps:
-    - uses: actions/checkout@v4
-    - name: Build
-      run: cargo build --verbose
-    - name: Run tests
-      run: cargo test --verbose
+      - uses: actions/checkout@v3
+      - name: Test default (no features)
+        run: cargo test --no-default-features
+
+  test-rocket:
+    runs-on: ubuntu-latest
+    env:
+      JWT_PRIVATE_KEY: ${{ secrets.JWT_PRIVATE_KEY }}
+      JWT_PUBLIC_KEY: ${{ secrets.JWT_PUBLIC_KEY }}
+    steps:
+      - uses: actions/checkout@v3
+      - name: Test with Rocket feature
+        run: cargo test --features rocket
