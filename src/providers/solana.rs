@@ -11,18 +11,18 @@ use solana_sdk::{
 /// - `X-signature`: Signature of the message
 /// - `X-public-key`: Wallet public key (as base58 string)
 /// - `X-message`: The signed message (should match exactly)
-pub struct WalletAuth {
+pub struct SolanaAuth {
     pub credentials: Pubkey
 }
 
-impl AuthProvider for WalletAuth {
+impl AuthProvider for SolanaAuth {
     fn subject(&self) -> String {
         self.credentials.to_string()
     }
 }
 
-impl WalletAuth {
-    pub fn is_valid_signature(message: &str, signature: &str, pubkey: &Pubkey) -> Result<bool, WalletAuthError> {
+impl SolanaAuth {
+    pub fn is_valid_signature(message: &str, signature: &str, pubkey: &Pubkey) -> Result<bool, SolanaAuthError> {
         Ok(Signature::from_str(signature)?.verify(
             &pubkey.to_bytes(),
             message.as_bytes()
@@ -31,7 +31,7 @@ impl WalletAuth {
 
     #[cfg(test)]
     pub (crate) fn mock() -> Self {
-        WalletAuth { credentials: Pubkey::new_unique() }
+        SolanaAuth { credentials: Pubkey::new_unique() }
     }
 }
 
@@ -45,8 +45,8 @@ use super::AuthProvider;
 
 #[cfg(feature="rocket")]
 #[rocket::async_trait]
-impl<'r> FromRequest<'r> for WalletAuth {
-    type Error = WalletAuthError;
+impl<'r> FromRequest<'r> for SolanaAuth {
+    type Error = SolanaAuthError;
 
     async fn from_request(req: &'r Request<'_>) -> request::Outcome<Self, Self::Error> {
         let signature = req.headers().get_one("X-signature");
@@ -59,24 +59,24 @@ impl<'r> FromRequest<'r> for WalletAuth {
                 Err(e) => return Outcome::Error((Status::BadRequest, e.into())),
             };
             
-            let valid = match WalletAuth::is_valid_signature(message, signature, &pubkey) {
+            let valid = match SolanaAuth::is_valid_signature(message, signature, &pubkey) {
                 Ok(valid) => valid,
                 Err(e) => return Outcome::Error((Status::BadRequest, e)),
             };
             
             if !valid {
-                return Outcome::Error((Status::Forbidden, WalletAuthError::Unauthorized));
+                return Outcome::Error((Status::Forbidden, SolanaAuthError::Unauthorized));
             }
             
-            return Outcome::Success(WalletAuth { credentials: pubkey });
+            return Outcome::Success(SolanaAuth { credentials: pubkey });
         }
         
-        Outcome::Error((Status::BadRequest, WalletAuthError::MissingCredentials))
+        Outcome::Error((Status::BadRequest, SolanaAuthError::MissingCredentials))
     }
 }
 
 #[derive(thiserror::Error, Debug, PartialEq)]
-pub enum WalletAuthError {
+pub enum SolanaAuthError {
     #[error("Missing credentials")]
     MissingCredentials,
     #[error("{0}")]
@@ -107,7 +107,7 @@ mod test {
     fn test_is_valid_signature_valid_signature() {
         let (wallet, message, signature) = generate_valid_signature();
 
-        let result = WalletAuth::is_valid_signature(
+        let result = SolanaAuth::is_valid_signature(
             &message,
             &signature,
             &wallet.pubkey(),
@@ -123,7 +123,7 @@ mod test {
         let (_, message, signature) = generate_valid_signature();
 
         let invalid_pubkey = Pubkey::new_unique();
-        let result = WalletAuth::is_valid_signature(
+        let result = SolanaAuth::is_valid_signature(
             &message,
             &signature,
             &invalid_pubkey,
@@ -138,7 +138,7 @@ mod test {
     fn test_is_valid_signature_invalid_message() {
         let (wallet, _, signature) = generate_valid_signature();
 
-        let result = WalletAuth::is_valid_signature(
+        let result = SolanaAuth::is_valid_signature(
             "invalid message",
             &signature,
             &wallet.pubkey(),
@@ -153,7 +153,7 @@ mod test {
     fn test_is_valid_signature_invalid_signature() {
         let (wallet, message, _) = generate_valid_signature();
 
-        let result = WalletAuth::is_valid_signature(
+        let result = SolanaAuth::is_valid_signature(
             &message,
             "invalid signature",
             &wallet.pubkey(),
@@ -162,7 +162,7 @@ mod test {
         assert!(result.is_err());
         if let Err(err) = result {
             match err {
-                WalletAuthError::SignatureError(_) => (),
+                SolanaAuthError::SignatureError(_) => (),
                 _ => panic!("Expected signature parse error"),
             }
         }
@@ -176,7 +176,7 @@ mod test {
     
     #[cfg(feature="rocket")]
     #[rocket::get("/test")]
-    fn test_route(_wallet_auth: WalletAuth) -> &'static str {
+    fn test_route(_wallet_auth: SolanaAuth) -> &'static str {
         "Success"
     }
 
