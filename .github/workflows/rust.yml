@@ -12,6 +12,7 @@ env:
 jobs:
   test-default:
     runs-on: ubuntu-latest
+    environment: ci
     env:
       JWT_PRIVATE_KEY: ${{ secrets.JWT_PRIVATE_KEY }}
       JWT_PUBLIC_KEY: ${{ secrets.JWT_PUBLIC_KEY }}
@@ -22,6 +23,7 @@ jobs:
 
   test-rocket:
     runs-on: ubuntu-latest
+    environment: ci
     env:
       JWT_PRIVATE_KEY: ${{ secrets.JWT_PRIVATE_KEY }}
       JWT_PUBLIC_KEY: ${{ secrets.JWT_PUBLIC_KEY }}
