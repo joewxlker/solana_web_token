@@ -1,77 +1,143 @@
 use std::str::FromStr;
 
+use rocket::outcome::Outcome;
 use solana_sdk::{
-    signature::Signature, signature::ParseSignatureError, 
-    pubkey::ParsePubkeyError, pubkey::Pubkey
+    pubkey::{ParsePubkeyError, Pubkey}, signature::{ParseSignatureError, Signature}
 };
 
-/// Wallet-based authentication data extracted from request headers.
+#[cfg(feature="rocket")]
+use rocket::{
+    http::Status, request, request::Request, 
+    request::FromRequest
+};
+
+use super::*;
+
+/// Wallet-based authentication using Solana keypairs and signed messages.
 ///
-/// Expected headers:
-/// - `X-signature`: Signature of the message
-/// - `X-public-key`: Wallet public key (as base58 string)
-/// - `X-message`: The signed message (should match exactly)
+/// Used as a request guard to authenticate users via Solana wallets.
+/// Requires the following headers:
+///
+/// - `X-signature`: The base58-encoded signature of the message
+/// - `X-public-key`: The base58-encoded Solana public key
+/// - `X-message`: The message that was signed
+///
+/// The message must match exactly on the client and server.
+///
+/// # Example (Client Request)
+/// ```http
+/// GET /protected
+/// X-signature: 4fZ...uPk
+/// X-public-key: Fqsw8...3vn
+/// X-message: please_sign_in
+/// ```
+///
+/// Use `SolanaAuth` directly in your route:
+/// ```rust
+/// #[get("/protected")]
+/// fn protected_route(auth: SolanaAuth) -> String {
+///     format!("Authenticated: {}", auth.credentials)
+/// }
+/// ```
 pub struct SolanaAuth {
-    pub credentials: Pubkey
+    pub credentials: Pubkey,
+    pub signature: Signature,
+    pub message: String,
 }
 
 impl AuthProvider for SolanaAuth {
+    type Error = SolanaAuthError;
+
+    fn verify(&self) -> Result<(), Self::Error> {
+        if self.signature.verify(
+            &self.credentials.to_bytes(),
+            self.message.as_bytes()
+        ) {
+            return Ok(());
+        }
+
+        Err(Self::Error::Unauthorized)
+    }
+
+    fn from_headers<'a>(req: &Request<'a>) -> Result<Self, Self::Error> {
+        let signature = match req.headers().get_one("X-signature") {
+            Some(signature) => Signature::from_str(signature)?,
+            None => return Err(SolanaAuthError::MissingCredentials)
+        };
+
+        let credentials = match req.headers().get_one("X-public-key") {
+            Some(public_key) => Pubkey::from_str(public_key)?,
+            None => return Err(SolanaAuthError::MissingCredentials)
+        };
+
+        let message = match req.headers().get_one("X-message") {
+            Some(message) => message.to_string(),
+            None => return Err(SolanaAuthError::MissingCredentials)
+        };
+            
+        Ok(SolanaAuth { credentials, signature, message })
+    }
+
     fn subject(&self) -> String {
         self.credentials.to_string()
     }
 }
 
+#[cfg(test)]
 impl SolanaAuth {
-    pub fn is_valid_signature(message: &str, signature: &str, pubkey: &Pubkey) -> Result<bool, SolanaAuthError> {
-        Ok(Signature::from_str(signature)?.verify(
-            &pubkey.to_bytes(),
-            message.as_bytes()
-        ))
-    }
-
-    #[cfg(test)]
     pub (crate) fn mock() -> Self {
-        SolanaAuth { credentials: Pubkey::new_unique() }
+        use solana_sdk::{signature::Keypair, signer::Signer};
+
+        let signer = Keypair::new();
+        let message = "authenticate".to_string();
+        let signature = signer.sign_message(&message.as_bytes());
+
+        SolanaAuth { 
+            credentials: signer.pubkey(), 
+            signature, 
+            message 
+        }
+    }
+    pub (crate) fn mock_with_message(message: &str) -> Self {
+        use solana_sdk::{signature::Keypair, signer::Signer};
+
+        let signer = Keypair::new();
+        let signature = signer.sign_message(message.as_bytes());
+
+        SolanaAuth { 
+            credentials: signer.pubkey(), 
+            signature, 
+            message: message.to_string()
+        }
     }
 }
 
-#[cfg(feature="rocket")]
-use rocket::{
-    http::Status, request, request::Request, 
-    request::FromRequest, request::Outcome
-};
+#[rocket::async_trait]
+impl<'r, T: AuthProvider + Send + Sync> FromRequest<'r> for Provider<T> {
+    type Error = T::Error;
+    async fn from_request(req: &'r Request<'_>) -> request::Outcome<Self, Self::Error> {
+        let auth = match T::from_headers(req) {
+            Ok(auth) => auth,
+            Err(err) => return Outcome::Error((Status::BadRequest, err))
+        };
 
-use super::AuthProvider;
+        if let Err(err) = auth.verify() {
+            return Outcome::Error((Status::Unauthorized, err));
+        };
+        
+        Outcome::Success(Provider { auth })
+    }
+}
 
-#[cfg(feature="rocket")]
 #[rocket::async_trait]
 impl<'r> FromRequest<'r> for SolanaAuth {
     type Error = SolanaAuthError;
-
     async fn from_request(req: &'r Request<'_>) -> request::Outcome<Self, Self::Error> {
-        let signature = req.headers().get_one("X-signature");
-        let pubkey = req.headers().get_one("X-public-key");
-        let message = req.headers().get_one("X-message");
-        
-        if let (Some(message), Some(signature), Some(pubkey)) = (message, signature, pubkey) {
-            let pubkey = match Pubkey::from_str(pubkey) {
-                Ok(p) => p,
-                Err(e) => return Outcome::Error((Status::BadRequest, e.into())),
-            };
-            
-            let valid = match SolanaAuth::is_valid_signature(message, signature, &pubkey) {
-                Ok(valid) => valid,
-                Err(e) => return Outcome::Error((Status::BadRequest, e)),
-            };
-            
-            if !valid {
-                return Outcome::Error((Status::Forbidden, SolanaAuthError::Unauthorized));
-            }
-            
-            return Outcome::Success(SolanaAuth { credentials: pubkey });
+        match Provider::<SolanaAuth>::from_request(req).await {
+            Outcome::Success(provider) => return Outcome::Success(provider.auth),
+            Outcome::Error(err) => return Outcome::Error(err),
+            Outcome::Forward(path) => return Outcome::Forward(path)
         }
-        
-        Outcome::Error((Status::BadRequest, SolanaAuthError::MissingCredentials))
     }
 }
 
@@ -91,80 +157,48 @@ pub enum SolanaAuthError {
 mod test {
     use super::*;
 
-    use solana_sdk::signature::Keypair;
     use solana_sdk::pubkey::Pubkey;
-    use solana_sdk::signer::Signer;
-
-    fn generate_valid_signature() -> (Keypair, String, String) {
-        let wallet = Keypair::new();
-        let message = "authenticate";
-        let signature = wallet.sign_message(&message.as_bytes());
-        
-        (wallet, message.to_string(), signature.to_string())
-    }
 
     #[test]
     fn test_is_valid_signature_valid_signature() {
-        let (wallet, message, signature) = generate_valid_signature();
-
-        let result = SolanaAuth::is_valid_signature(
-            &message,
-            &signature,
-            &wallet.pubkey(),
-        );
+        let auth = SolanaAuth::mock();
         
-        assert!(result.is_ok());
-        let verified = result.unwrap();
-        assert!(verified);
+        match auth.verify() {
+            Ok(_) => (),
+            result => panic!("Expected Ok response but received: {:?}", result),
+        }
     }
 
     #[test]
     fn test_is_valid_signature_invalid_pubkey() {
-        let (_, message, signature) = generate_valid_signature();
+        let mut auth = SolanaAuth::mock();
+        auth.credentials = Pubkey::new_unique();
 
-        let invalid_pubkey = Pubkey::new_unique();
-        let result = SolanaAuth::is_valid_signature(
-            &message,
-            &signature,
-            &invalid_pubkey,
-        );
-        
-        assert!(result.is_ok());
-        let verified = result.unwrap();
-        assert!(!verified);
+        match auth.verify() {
+            Err(SolanaAuthError::Unauthorized) => (),
+            result => panic!("Expected Unauthorized but received: {:?}", result),
+        }
     }
 
     #[test]
     fn test_is_valid_signature_invalid_message() {
-        let (wallet, _, signature) = generate_valid_signature();
+        let mut auth = SolanaAuth::mock();
+        auth.message = "invalid_message".to_string();
 
-        let result = SolanaAuth::is_valid_signature(
-            "invalid message",
-            &signature,
-            &wallet.pubkey(),
-        );
-        
-        assert!(result.is_ok());
-        let verified = result.unwrap();
-        assert!(!verified);
+        match auth.verify() {
+            Err(SolanaAuthError::Unauthorized) => (),
+            result => panic!("Expected Unauthorized but received: {:?}", result),
+        }
     }
 
     #[test]
     fn test_is_valid_signature_invalid_signature() {
-        let (wallet, message, _) = generate_valid_signature();
+        let mut auth = SolanaAuth::mock();
+        auth.signature = Signature::new_unique();
 
-        let result = SolanaAuth::is_valid_signature(
-            &message,
-            "invalid signature",
-            &wallet.pubkey(),
-        );
-        
-        assert!(result.is_err());
-        if let Err(err) = result {
-            match err {
-                SolanaAuthError::SignatureError(_) => (),
-                _ => panic!("Expected signature parse error"),
-            }
+        match auth.verify() {
+            Err(SolanaAuthError::Unauthorized) => (),
+            result => panic!("Expected Unauthorized but received: {:?}", result),
         }
     }
 
@@ -192,13 +226,13 @@ mod test {
     async fn test_wallet_auth_valid_signature() {
         let client = setup_client().await;
 
-        let (wallet, message, signature) = generate_valid_signature();
+        let auth = SolanaAuth::mock();
 
         let response = client
             .get("/test")
-            .header(Header::new("X-signature", signature))
-            .header(Header::new("X-public-key", wallet.pubkey().to_string()))
-            .header(Header::new("X-message", message))
+            .header(Header::new("X-signature", auth.signature.to_string()))
+            .header(Header::new("X-public-key", auth.credentials.to_string()))
+            .header(Header::new("X-message", auth.message))
             .dispatch()
             .await;
 
@@ -210,13 +244,13 @@ mod test {
     async fn test_wallet_auth_malformed_signature() {
         let client = setup_client().await;
 
-        let (wallet, message, _) = generate_valid_signature();
+        let auth = SolanaAuth::mock();
 
         let response = client
             .get("/test")
             .header(Header::new("X-signature", "malformed_signature"))
-            .header(Header::new("X-public-key", wallet.pubkey().to_string()))
-            .header(Header::new("X-message", message))
+            .header(Header::new("X-public-key", auth.credentials.to_string()))
+            .header(Header::new("X-message", auth.message))
             .dispatch()
             .await;
 
@@ -228,17 +262,17 @@ mod test {
     async fn test_wallet_auth_invalid_signature() {
         let client = setup_client().await;
 
-        let (_, message, signature) = generate_valid_signature();
+        let auth = SolanaAuth::mock();
 
         let response = client
             .get("/test")
-            .header(Header::new("X-signature", signature))
+            .header(Header::new("X-signature", auth.signature.to_string()))
             .header(Header::new("X-public-key", Pubkey::new_unique().to_string()))
-            .header(Header::new("X-message", message))
+            .header(Header::new("X-message", auth.message))
             .dispatch()
             .await;
 
-        assert_eq!(response.status(), Status::Forbidden);
+        assert_eq!(response.status(), Status::Unauthorized);
     }
 
     #[cfg(feature="rocket")]
@@ -258,12 +292,12 @@ mod test {
     async fn test_wallet_auth_missing_signature_header() {
         let client = setup_client().await;
 
-        let (wallet, message, _) = generate_valid_signature();
+        let auth = SolanaAuth::mock();
 
         let response = client
             .get("/test")
-            .header(Header::new("X-public-key", wallet.pubkey().to_string()))
-            .header(Header::new("X-message", message))
+            .header(Header::new("X-public-key", auth.credentials.to_string()))
+            .header(Header::new("X-message", auth.message))
             .dispatch()
             .await;
 
@@ -275,12 +309,12 @@ mod test {
     async fn test_wallet_auth_missing_public_key_header() {
         let client = setup_client().await;
 
-        let (_, message, signature) = generate_valid_signature();
+        let auth = SolanaAuth::mock();
 
         let response = client
             .get("/test")
-            .header(Header::new("X-signature", signature))
-            .header(Header::new("X-message", message))
+            .header(Header::new("X-signature", auth.signature.to_string()))
+            .header(Header::new("X-message", auth.message))
             .dispatch()
             .await;
 
@@ -292,12 +326,12 @@ mod test {
     async fn test_wallet_auth_missing_message_header() {
         let client = setup_client().await;
 
-        let (wallet, _, signature) = generate_valid_signature();
+        let auth = SolanaAuth::mock();
 
         let response = client
             .get("/test")
-            .header(Header::new("X-signature", signature))
-            .header(Header::new("X-public-key", wallet.pubkey().to_string()))
+            .header(Header::new("X-signature", auth.signature.to_string()))
+            .header(Header::new("X-public-key", auth.credentials.to_string()))
             .dispatch()
             .await;
 
@@ -309,14 +343,13 @@ mod test {
     async fn test_wallet_auth_large_message() {
         let client = setup_client().await;
 
-        let (wallet, _, _) = generate_valid_signature();
         let large_message = "A".repeat(10_000);
-        let signature = wallet.sign_message(&large_message.as_bytes());
+        let auth = SolanaAuth::mock_with_message(&large_message);
 
         let response = client
             .get("/test")
-            .header(Header::new("X-signature", signature.to_string()))
-            .header(Header::new("X-public-key", wallet.pubkey().to_string()))
+            .header(Header::new("X-signature", auth.signature.to_string()))
+            .header(Header::new("X-public-key", auth.credentials.to_string()))
             .header(Header::new("X-message", large_message))
             .dispatch()
             .await;
