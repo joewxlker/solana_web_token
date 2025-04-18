@@ -1,6 +1,4 @@
-use std::fmt::Debug;
-
-use rocket::Request; 
+use std::{collections::HashMap, fmt::Debug};
 
 pub mod solana;
 
@@ -30,11 +28,58 @@ pub trait AuthProvider {
     /// - `X-signature`
     /// - `X-public-key`
     /// - `X-message`
-    fn from_headers<'a>(req: &Request<'a>) -> Result<Self, Self::Error> where Self: Sized + Send + Sync;
+    fn from_headers<'a>(req: Headers) -> Result<Self, Self::Error> where Self: Sized + Send + Sync;
 
     /// Returns a stable identifier (typically a public key or wallet address)
     /// used as the JWT subject (`sub`) or application-level identity.
     fn subject(&self) -> String;
+}
+
+/// A lightweight abstraction over HTTP headers, used for authentication.
+///
+/// This struct is passed to [`AuthProvider::from_headers`] to extract authentication
+/// credentials from incoming requests, allowing `AuthProvider` implementations to remain
+/// framework-agnostic.
+///
+/// Internally, `Headers` wraps a [`HashMap<String, String>`] containing header names
+/// and values as owned strings.
+///
+/// # Framework Integration
+/// Implement [`From<Request>`] (or similar) for your framework to convert a request type
+/// into `Headers`. For example, Rocket provides:
+///
+/// ```rust,ignore
+/// impl<'a> From<rocket::Request<'a>> for Headers { ... }
+/// ```
+///
+/// # Access
+/// You can access headers using the inner map:
+///
+/// ```rust,ignore
+/// if let Some(signature) = headers.0.get("x-signature") {
+///     // use signature...
+/// }
+/// ```
+pub struct Headers(pub HashMap<String, String>);
+
+#[cfg(feature="rocket")]
+impl <'a>From<&rocket::Request<'a>> for Headers {
+    fn from(value: &rocket::Request<'a>) -> Self {
+        let mut map = HashMap::new();
+        let mut headers = value.headers().clone(); 
+        let all = headers.remove_all();
+
+        for val in all {
+            let key = val.name
+                .into_string()
+                .to_ascii_lowercase();
+            let value = val.value.to_string();
+
+            map.insert(key, value);
+        }
+
+        Headers(map)
+    }
 }
 
 /// A generic request guard wrapper for implementing blockchain-based authentication.
@@ -56,6 +101,7 @@ pub trait AuthProvider {
 /// ```rust
 /// use solana_web_token::providers::solana::SolanaAuth;
 /// 
+/// #[cfg(feature="rocket")]
 /// #[rocket::get("/protected")]
 /// fn protected_route(auth: SolanaAuth) -> String {
 ///     format!("Authenticated: {}", auth.credentials)

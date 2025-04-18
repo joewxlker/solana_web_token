@@ -1,14 +1,13 @@
 use std::str::FromStr;
 
-use rocket::outcome::Outcome;
 use solana_sdk::{
     pubkey::{ParsePubkeyError, Pubkey}, signature::{ParseSignatureError, Signature}
 };
 
 #[cfg(feature="rocket")]
 use rocket::{
-    http::Status, request, request::Request, 
-    request::FromRequest
+    http::Status, request, request::Request,
+    request::FromRequest, outcome::Outcome
 };
 
 use super::*;
@@ -36,6 +35,7 @@ use super::*;
 /// ```rust
 /// use solana_web_token::providers::solana::SolanaAuth;
 /// 
+/// #[cfg(feature="rocket")]
 /// #[rocket::get("/protected")]
 /// fn protected_route(auth: SolanaAuth) -> String {
 ///     format!("Authenticated: {}", auth.credentials)
@@ -64,18 +64,18 @@ impl AuthProvider for SolanaAuth {
         Err(Self::Error::Unauthorized)
     }
 
-    fn from_headers<'a>(req: &Request<'a>) -> Result<Self, Self::Error> {
-        let signature = match req.headers().get_one("X-signature") {
+    fn from_headers(headers: Headers) -> Result<Self, Self::Error> {
+        let signature = match headers.0.get("X-signature") {
             Some(signature) => Signature::from_str(signature)?,
             None => return Err(SolanaAuthError::MissingCredentials)
         };
 
-        let credentials = match req.headers().get_one("X-public-key") {
+        let credentials = match headers.0.get("X-public-key") {
             Some(public_key) => Pubkey::from_str(public_key)?,
             None => return Err(SolanaAuthError::MissingCredentials)
         };
 
-        let message = match req.headers().get_one("X-message") {
+        let message = match headers.0.get("X-message") {
             Some(message) => message.to_string(),
             None => return Err(SolanaAuthError::MissingCredentials)
         };
@@ -117,11 +117,13 @@ impl SolanaAuth {
     }
 }
 
+
+#[cfg(feature="rocket")]
 #[rocket::async_trait]
 impl<'r, T: AuthProvider + Send + Sync> FromRequest<'r> for Provider<T> {
     type Error = T::Error;
     async fn from_request(req: &'r Request<'_>) -> request::Outcome<Self, Self::Error> {
-        let auth = match T::from_headers(req) {
+        let auth = match T::from_headers(Headers::from(req)) {
             Ok(auth) => auth,
             Err(err) => return Outcome::Error((Status::BadRequest, err))
         };
@@ -134,6 +136,7 @@ impl<'r, T: AuthProvider + Send + Sync> FromRequest<'r> for Provider<T> {
     }
 }
 
+#[cfg(feature="rocket")]
 #[rocket::async_trait]
 impl<'r> FromRequest<'r> for SolanaAuth {
     type Error = SolanaAuthError;
