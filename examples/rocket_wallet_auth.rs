@@ -9,7 +9,7 @@ use std::str::FromStr;
 
 use rocket::{routes, serde::json::Json, Build, Rocket};
 use solana_sdk::pubkey::Pubkey;
-use solana_web_token::{manager::AuthManager, providers::solana_wallet_auth::WalletAuth, token::AuthToken};
+use solana_web_token::{manager::AuthManager, providers::solana_wallet_auth::SolanaAuth, token::AuthToken};
 
 const ONE_DAY_IN_SECONDS: u64 = 60 * 60 * 24;
 const ONE_MINUTE_IN_SECONDS: u64 = 60;
@@ -48,7 +48,7 @@ pub async fn protected_route(auth_token: AuthToken<()>) -> Result<(), ()> {
 }
 
 #[rocket::post("/")]
-pub async fn authorize(wallet_auth: WalletAuth, auth_manager: AuthManager) -> Json<String> {
+pub async fn authorize(wallet_auth: SolanaAuth, auth_manager: AuthManager) -> Json<String> {
     // Optional: fetch data from database / blockchain using wallet_auth
     let token = auth_manager.generate_token::<(), _>(wallet_auth, None);
 

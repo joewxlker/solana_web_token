@@ -153,12 +153,12 @@ mod test {
     use once_cell::sync::Lazy;
     use rocket::tokio;
 
-    use crate::providers::solana_wallet_auth::WalletAuth;
+    use crate::providers::solana_wallet_auth::SolanaAuth;
 
     use super::*;
 
     pub static VALID_TOKEN: Lazy<String> = Lazy::new(|| {
-        let auth = WalletAuth::mock();
+        let auth = SolanaAuth::mock();
         let manager = AuthManager::mock();
 
         manager.generate_token(auth, None::<()>)
@@ -214,7 +214,7 @@ mod test {
         let manager = AuthManager::mock_with_config(0, 0);
 
         let token = manager.generate_token::<(), _>(
-            WalletAuth::mock(), 
+            SolanaAuth::mock(), 
             None
         );
         
@@ -236,7 +236,7 @@ mod test {
         let manager = AuthManager::mock();
 
         let token = manager.generate_token(
-            WalletAuth::mock(), 
+            SolanaAuth::mock(), 
             None::<()>
         );
         manager.decode_token::<()>(&token).unwrap();
