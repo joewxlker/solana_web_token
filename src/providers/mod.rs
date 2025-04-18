@@ -1,4 +1,4 @@
-pub mod solana_wallet_auth;
+pub mod solana;
 
 pub trait AuthProvider {
     fn subject(&self) -> String;

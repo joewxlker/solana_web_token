@@ -153,7 +153,7 @@ mod test {
     use once_cell::sync::Lazy;
     use rocket::tokio;
 
-    use crate::providers::solana_wallet_auth::SolanaAuth;
+    use crate::providers::solana::SolanaAuth;
 
     use super::*;
 
