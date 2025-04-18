@@ -54,10 +54,15 @@ pub trait AuthProvider {
 ///
 /// # Example
 /// ```rust
+/// use solana_web_token::providers::solana::SolanaAuth;
+/// 
 /// #[rocket::get("/protected")]
-/// fn protected(auth: SolanaAuth) {
-///     // Internally uses Provider<SolanaAuth> for verification
+/// fn protected_route(auth: SolanaAuth) -> String {
+///     format!("Authenticated: {}", auth.credentials)
 /// }
+/// 
+/// #[rocket::main]
+/// async fn main() {}
 /// ```
 pub struct Provider<T: AuthProvider + Send + Sync> {
     auth: T
