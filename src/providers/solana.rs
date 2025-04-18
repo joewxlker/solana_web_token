@@ -65,17 +65,17 @@ impl AuthProvider for SolanaAuth {
     }
 
     fn from_headers(headers: Headers) -> Result<Self, Self::Error> {
-        let signature = match headers.0.get("X-signature") {
+        let signature = match headers.0.get("x-signature") {
             Some(signature) => Signature::from_str(signature)?,
             None => return Err(SolanaAuthError::MissingCredentials)
         };
 
-        let credentials = match headers.0.get("X-public-key") {
+        let credentials = match headers.0.get("x-public-key") {
             Some(public_key) => Pubkey::from_str(public_key)?,
             None => return Err(SolanaAuthError::MissingCredentials)
         };
 
-        let message = match headers.0.get("X-message") {
+        let message = match headers.0.get("x-message") {
             Some(message) => message.to_string(),
             None => return Err(SolanaAuthError::MissingCredentials)
         };
