@@ -102,8 +102,8 @@ cargo run --example rocket
 - ✅ Rocket integration with real request guards
 
 ## 📦 Coming Soon?
--  Supabase or Postgres-based identity provider
--  OAuth support (via AuthProvider)
+-  Multichain identity provider support
+-  Suport for multiple frameworks
 -  Full session-based token refresh
 
 ## 📚 Docs
