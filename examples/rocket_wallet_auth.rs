@@ -9,7 +9,7 @@ use std::str::FromStr;
 
 use rocket::{routes, serde::json::Json, Build, Rocket};
 use solana_sdk::pubkey::Pubkey;
-use solana_web_token::{manager::AuthManager, providers::solana::SolanaAuth, token::AuthToken};
+use solana_web_token::{core::{manager::AuthManager, token::AuthToken}, providers::solana::SolanaAuth};
 
 const ONE_DAY_IN_SECONDS: u64 = 60 * 60 * 24;
 const ONE_MINUTE_IN_SECONDS: u64 = 60;

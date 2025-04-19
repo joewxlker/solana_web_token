@@ -7,15 +7,6 @@ use serde::{
     Deserialize, Serialize
 };
 
-#[cfg(feature="rocket")]
-use rocket::{
-    http::Status, request::{
-    FromRequest, Outcome, Request
-}};
-
-use crate::error::AuthTokenFromRequestError;
-use crate::manager::AuthManager;
-
 /// Represents a JWT claim payload, optionally carrying user-defined data.
 ///
 /// This struct is typically managed by [`AuthManager`] and is not meant to be constructed manually.
@@ -94,37 +85,11 @@ impl<'de, T: DeserializeOwned + Serialize> AuthToken<T> {
     }
 }
 
-#[cfg(feature="rocket")]
-#[cfg_attr(docsrs, doc(cfg(feature = "rocket")))]
-#[rocket::async_trait]
-impl<'r, T: Serialize + DeserializeOwned> FromRequest<'r> for AuthToken<T> {
-    type Error = AuthTokenFromRequestError;
-    
-    async fn from_request(req: &'r Request<'_>) -> Outcome<Self, Self::Error> {
-        if let Some(auth_str) = req.headers().get_one("Authorization") {
-            if let Some(token) = auth_str.strip_prefix("Bearer ") {
-                let auth = match AuthManager::from_request(req).await {
-                    Outcome::Success(a) => a,
-                    Outcome::Error(err) => return Outcome::Error(err),
-                    Outcome::Forward(res) => return Outcome::Forward(res)
-                };
-
-                return match Self::decode(token, auth.leeway, &auth.decoding_key) {
-                    Ok(token_data) => Outcome::Success(token_data),
-                    Err(error) => Outcome::Error((Status::Forbidden, AuthTokenFromRequestError::InvalidToken(error)))
-                }
-            } else {
-                return Outcome::Error((Status::BadRequest, AuthTokenFromRequestError::InvalidAuthHeader));
-            }
-        }
-
-        Outcome::Error((Status::BadRequest, AuthTokenFromRequestError::MissingAuthHeader))
-    }
-}
-
 #[cfg(test)]
 mod test {
     use solana_sdk::pubkey::Pubkey;
+
+    use crate::core::manager::AuthManager;
 
     use super::*;
 

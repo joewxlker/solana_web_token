@@ -4,12 +4,6 @@ use solana_sdk::{
     pubkey::{ParsePubkeyError, Pubkey}, signature::{ParseSignatureError, Signature}
 };
 
-#[cfg(feature="rocket")]
-use rocket::{
-    http::Status, request, request::Request,
-    request::FromRequest, outcome::Outcome
-};
-
 use super::*;
 
 /// Wallet-based authentication using Solana keypairs and signed messages.
@@ -117,38 +111,6 @@ impl SolanaAuth {
     }
 }
 
-
-#[cfg(feature="rocket")]
-#[rocket::async_trait]
-impl<'r, T: AuthProvider + Send + Sync> FromRequest<'r> for Provider<T> {
-    type Error = T::Error;
-    async fn from_request(req: &'r Request<'_>) -> request::Outcome<Self, Self::Error> {
-        let auth = match T::from_headers(Headers::from(req)) {
-            Ok(auth) => auth,
-            Err(err) => return Outcome::Error((Status::BadRequest, err))
-        };
-
-        if let Err(err) = auth.verify() {
-            return Outcome::Error((Status::Unauthorized, err));
-        };
-        
-        Outcome::Success(Provider { auth })
-    }
-}
-
-#[cfg(feature="rocket")]
-#[rocket::async_trait]
-impl<'r> FromRequest<'r> for SolanaAuth {
-    type Error = SolanaAuthError;
-    async fn from_request(req: &'r Request<'_>) -> request::Outcome<Self, Self::Error> {
-        match Provider::<SolanaAuth>::from_request(req).await {
-            Outcome::Success(provider) => return Outcome::Success(provider.auth),
-            Outcome::Error(err) => return Outcome::Error(err),
-            Outcome::Forward(path) => return Outcome::Forward(path)
-        }
-    }
-}
-
 #[derive(thiserror::Error, Debug, PartialEq)]
 pub enum SolanaAuthError {
     #[error("Missing credentials")]
@@ -209,27 +171,29 @@ mod test {
             result => panic!("Expected Unauthorized but received: {:?}", result),
         }
     }
+}
 
-    #[cfg(feature="rocket")]
+#[cfg(test)]
+#[cfg(feature="rocket")]
+mod rocket_integration {
     use rocket::{
-        http::Header, local::asynchronous::Client, 
+        http::{Header, Status}, local::asynchronous::Client, 
         routes, tokio
     };
+
+    use super::*;
     
-    #[cfg(feature="rocket")]
     #[rocket::get("/test")]
     fn test_route(_wallet_auth: SolanaAuth) -> &'static str {
         "Success"
     }
 
-    #[cfg(feature="rocket")]
     async fn setup_client() -> Client {
         Client::tracked(rocket::build().mount("/", routes![test_route]))
             .await
             .expect("valid rocket instance")
     }
 
-    #[cfg(feature="rocket")]
     #[tokio::test]
     async fn test_wallet_auth_valid_signature() {
         let client = setup_client().await;
@@ -247,7 +211,6 @@ mod test {
         assert_eq!(response.status(), Status::Ok);
     }
 
-    #[cfg(feature="rocket")]
     #[tokio::test]
     async fn test_wallet_auth_malformed_signature() {
         let client = setup_client().await;
@@ -265,7 +228,6 @@ mod test {
         assert_eq!(response.status(), Status::BadRequest);
     }
 
-    #[cfg(feature="rocket")]
     #[tokio::test]
     async fn test_wallet_auth_invalid_signature() {
         let client = setup_client().await;
@@ -283,7 +245,6 @@ mod test {
         assert_eq!(response.status(), Status::Unauthorized);
     }
 
-    #[cfg(feature="rocket")]
     #[tokio::test]
     async fn test_wallet_auth_missing_headers() {
         let client = setup_client().await;
@@ -295,7 +256,6 @@ mod test {
         assert_eq!(response.status(), Status::BadRequest);
     }
 
-    #[cfg(feature="rocket")]
     #[tokio::test]
     async fn test_wallet_auth_missing_signature_header() {
         let client = setup_client().await;
@@ -312,7 +272,6 @@ mod test {
         assert_eq!(response.status(), Status::BadRequest);
     }
 
-    #[cfg(feature="rocket")]
     #[tokio::test]
     async fn test_wallet_auth_missing_public_key_header() {
         let client = setup_client().await;
@@ -329,7 +288,6 @@ mod test {
         assert_eq!(response.status(), Status::BadRequest);
     }
 
-    #[cfg(feature="rocket")]
     #[tokio::test]
     async fn test_wallet_auth_missing_message_header() {
         let client = setup_client().await;
@@ -346,7 +304,6 @@ mod test {
         assert_eq!(response.status(), Status::BadRequest);
     }
 
-    #[cfg(feature="rocket")]
     #[tokio::test]
     async fn test_wallet_auth_large_message() {
         let client = setup_client().await;

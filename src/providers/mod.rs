@@ -111,5 +111,5 @@ impl <'a>From<&rocket::Request<'a>> for Headers {
 /// async fn main() {}
 /// ```
 pub struct Provider<T: AuthProvider + Send + Sync> {
-    auth: T
+    pub auth: T
 }
