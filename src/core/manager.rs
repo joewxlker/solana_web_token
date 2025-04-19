@@ -2,17 +2,9 @@ use base64::{prelude::BASE64_STANDARD, Engine};
 use jsonwebtoken::{DecodingKey, EncodingKey};
 use serde::{de::DeserializeOwned, Serialize};
 
-#[cfg(feature="rocket")]
-use rocket::{
-    http::Status, Request, 
-    request::{FromRequest, Outcome}
-};
+use crate::providers::AuthProvider;
 
-#[cfg(feature="rocket")]
-use crate::error::AuthTokenFromRequestError;
-
-use crate::{providers::AuthProvider, token::AuthToken};
-
+use super::token::AuthToken;
 
 /// A manager for signing and verifying JWTs using ES256 (ECDSA P-256).
 ///
@@ -129,24 +121,6 @@ impl AuthManager {
             std::env::var("JWT_PUBLIC_KEY").expect("Missing JWT_PUBLIC_KEY in env"), 
             exp_seconds, 
             leeway
-        )
-    }
-}
-
-#[cfg(feature = "rocket")]
-#[rocket::async_trait]
-impl <'r>FromRequest<'r> for AuthManager {
-    type Error = AuthTokenFromRequestError;
-    /// Retrieves the `AuthManager` from Rocket state.
-    ///
-    /// # Returns
-    /// An [`Outcome`] containing the manager or an error if it was not mounted in Rocket.
-    ///
-    /// This method is used internally by Rocket-based `FromRequest` guards.
-    async fn from_request(req: &'r Request<'_>) -> Outcome<Self, Self::Error> {
-        req.rocket().state::<AuthManager>().map_or_else(
-            || Outcome::Error((Status::InternalServerError, AuthTokenFromRequestError::MissingAuthManager)),
-            |manager| Outcome::Success(manager.clone()),
         )
     }
 }

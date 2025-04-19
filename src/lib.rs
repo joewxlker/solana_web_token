@@ -1,4 +1,3 @@
-pub mod token;
-pub mod manager;
+pub mod core;
 pub mod providers;
-pub mod error;
+pub mod frameworks;
