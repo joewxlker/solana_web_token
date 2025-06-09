@@ -21,7 +21,7 @@ pub struct AuthToken<T> {
     pub exp: u64,
     pub iat: u64,
     pub sub: String,
-    pub data: Option<T>,
+    pub data: T,
 }
 
 impl<'de, T: DeserializeOwned + Serialize> AuthToken<T> {
@@ -58,7 +58,7 @@ impl<'de, T: DeserializeOwned + Serialize> AuthToken<T> {
     /// - `encoding_key`: Private key for signing
     pub(crate) fn sign(
         sub: String,
-        data: Option<T>,
+        data: T,
         exp: u64,
         encoding_key: &EncodingKey,
     ) -> String {
@@ -117,7 +117,13 @@ mod test {
         dotenv::dotenv().ok();
         let auth = build_auth_manager();
 
-        let signed = AuthToken::<String>::sign(Pubkey::new_unique().to_string(), None, 0, &auth.encoding_key);
+        let signed = AuthToken::<()>::sign(
+            Pubkey::new_unique().to_string(), 
+            (), 
+            0, 
+            &auth.encoding_key
+        );
+
         AuthToken::<String>::decode(signed.as_str(), 0, &auth.decoding_key).unwrap();
     }
 
@@ -135,7 +141,7 @@ mod test {
 
         let signed = AuthToken::<MockData>::sign(
             Pubkey::new_unique().to_string(), 
-            Some(data.clone()), 
+            data.clone(), 
             0, 
             &auth.encoding_key
         );
@@ -146,7 +152,7 @@ mod test {
             &auth.decoding_key
         ).unwrap();
 
-        let result = decoded.data.clone().unwrap();
+        let result = decoded.data.clone();
         
         assert_eq!(result.user_id, data.user_id);
         assert_eq!(result.username, data.username);

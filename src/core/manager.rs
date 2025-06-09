@@ -76,7 +76,7 @@ impl AuthManager {
     ///
     /// # Returns
     /// A signed JWT string.
-    pub fn generate_token<T: Serialize + DeserializeOwned, P: AuthProvider>(&self, auth: P, data: Option<T>) -> String {
+    pub fn generate_token<T: Serialize + DeserializeOwned, P: AuthProvider>(&self, auth: P, data: T) -> String {
         AuthToken::<T>::sign(
             auth.subject(),
             data,
@@ -194,9 +194,9 @@ mod test {
         dotenv::dotenv().ok();
         let manager = AuthManager::mock_with_config(0, 0);
 
-        let token = manager.generate_token::<(), _>(
+        let token = manager.generate_token(
             SolanaAuth::mock(), 
-            None
+            ()
         );
         
         tokio::time::sleep(Duration::from_secs(1)).await;

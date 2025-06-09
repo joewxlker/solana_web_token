@@ -50,7 +50,7 @@ pub async fn protected_route(auth_token: AuthToken<()>) -> Result<(), ()> {
 #[rocket::post("/")]
 pub async fn authorize(wallet_auth: SolanaAuth, auth_manager: AuthManager) -> Json<String> {
     // Optional: fetch data from database / blockchain using wallet_auth
-    let token = auth_manager.generate_token::<(), _>(wallet_auth, None);
+    let token = auth_manager.generate_token(wallet_auth, ());
 
     Json(token)
 }
