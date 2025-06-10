@@ -124,7 +124,7 @@ mod test {
             &auth.encoding_key
         );
 
-        AuthToken::<String>::decode(signed.as_str(), 0, &auth.decoding_key).unwrap();
+        AuthToken::<()>::decode(signed.as_str(), 0, &auth.decoding_key).unwrap();
     }
 
     #[test]
